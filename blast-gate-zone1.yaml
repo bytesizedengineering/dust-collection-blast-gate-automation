@@ -1,0 +1,79 @@
+esphome:
+  name: blast-gate-zone1
+  friendly_name: blast-gate-zone1
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: "blast-gate-zone1"
+    password: "fallback-password"
+
+captive_portal:
+
+# Define servo positions and state
+globals:
+  - id: open_position
+    type: float
+    initial_value: '-50.0'  # Open position
+  - id: closed_position
+    type: float
+    initial_value: '26.0'   # Closed position
+  - id: servo_state
+    type: bool
+    initial_value: 'false'  # Default: closed
+
+# PWM output for servo
+output:
+  - platform: esp8266_pwm
+    id: pwm_output
+    pin: D4
+    frequency: 50 Hz
+
+# Servo configuration with auto-detach
+servo:
+  - id: my_servo
+    output: pwm_output
+    min_level: 3%
+    max_level: 12%
+    auto_detach_time: 2s  # Release after 2s
+
+# Button to toggle servo state
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: D7
+      mode: INPUT_PULLUP
+      inverted: True
+    name: "Blast Gate Button"
+    on_press:
+      then:
+        - lambda: |-
+            bool state = id(servo_state);
+            auto pos = state ? id(closed_position) : id(open_position);
+            id(my_servo).write(pos / 100.0);
+            id(servo_state) = !state;
+
+# Home Assistant switch to control servo
+switch:
+  - platform: template
+    name: "Blast Gate Servo"
+    lambda: 'return id(servo_state);'
+    turn_on_action:
+      - lambda: |-
+          id(my_servo).write(id(open_position) / 100.0);
+          id(servo_state) = true;
+    turn_off_action:
+      - lambda: |-
+          id(my_servo).write(id(closed_position) / 100.0);
+          id(servo_state) = false;
